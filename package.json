@@ -1,0 +1,29 @@
+{
+  "name": "lostcity-model-editor",
+  "private": true,
+  "version": "1.0.0",
+  "description": "LostCity Model & Animation Editor - A web-based 3D model viewer and editor for Lost City",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "serve": "vite preview"
+  },
+  "keywords": [
+    "lostcity"
+  ],
+  "author": "AmVoidGuy",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.0.2",
+    "vite": "^5.0.8"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

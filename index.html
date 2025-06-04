@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LostCity Model & Anim Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="container">
+      <div id="controls">
+        <div style="margin-bottom: 10px; font-weight: bold">
+          Lost City Model & Anim Editor
+        </div>
+        <input
+          type="file"
+          id="file-input"
+          multiple
+          accept=".ob2"
+          webkitdirectory
+          directory
+        />
+        <div style="font-size: 11px; color: #aaa; margin-bottom: 10px">
+          Select your Server/content/ directory
+        </div>
+        <div id="view-mode-controls">
+          <label
+            for="view-mode-select"
+            style="font-size: 12px; display: block; margin-bottom: 5px"
+            >View Mode:</label
+          >
+          <select id="view-mode-select">
+            <option value="models">Models (.ob2)</option>
+            <option value="npcs">NPCs (.npc)</option>
+            <option value="objects">Objects (.obj)</option>
+            <option value="locations">Locations (.loc)</option>
+          </select>
+        </div>
+        <button id="vertex-toggle" class="control-button">
+          Show Vertex Numbers
+        </button>
+        <button id="wireframe-toggle" class="control-button">
+          Show Wireframe
+        </button>
+        <button id="edit-toggle" class="control-button">
+          Enable Vertex Editing
+        </button>
+        <button id="export-model-button" class="control-button">
+          Export Current Model
+        </button>
+        <input
+          type="text"
+          id="model-search"
+          class="search-bar"
+          placeholder="Search..."
+          style="margin-top: 10px"
+        />
+        <div id="status">No files loaded</div>
+        <div id="model-list"></div>
+      </div>
+
+      <div id="info">
+        <div>Mouse: Rotate view</div>
+        <div>Wheel: Zoom</div>
+        <div>W,A,S,D: Move view</div>
+        <div>Click faces to see info</div>
+      </div>
+
+      <div id="face-info">
+        <h3>Face Information</h3>
+        <div id="face-details"></div>
+      </div>
+
+      <div id="seq-list-panel" class="label-panel-common">
+        <h3>Sequences</h3>
+        <div class="label-controls">
+          <button
+            id="clear-seq"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Stop Current Sequence
+          </button>
+          <button
+            id="start-seq"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Start Current Sequence
+          </button>
+          <div style="margin-top: 8px; display: flex; align-items: center">
+            <input
+              type="checkbox"
+              id="loop-sequence-checkbox"
+              style="margin-right: 5px"
+            />
+            <label
+              for="loop-sequence-checkbox"
+              style="font-size: 11px; color: #ccc"
+              >Loop Sequence</label
+            >
+          </div>
+        </div>
+        <input
+          type="text"
+          id="seq-search"
+          class="search-bar"
+          placeholder="Search sequences..."
+        />
+        <div id="seq-list" class="label-list-common"></div>
+      </div>
+
+      <div id="animframe-list-panel" class="label-panel-common">
+        <h3>Animation Frames</h3>
+        <div class="label-controls">
+          <button
+            id="clear-frames"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Clear Frame Selection
+          </button>
+          <button
+            id="export-frame-btn"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Export Current Frame
+          </button>
+        </div>
+        <div id="animframe-list" class="label-list-common"></div>
+      </div>
+
+      <div id="animframe-details-panel" class="label-panel-common">
+        <h3>Frame Details</h3>
+        <div class="label-controls">
+          <button
+            id="clear-details"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Clear Detail Selection
+          </button>
+          <button
+            id="add-new-transform-btn"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Add New Transform
+          </button>
+          <button
+            id="delete-transform-btn"
+            class="label-control-btn"
+            style="margin-left: 5px; margin-bottom: 5px"
+          >
+            Delete Selected Transform
+          </button>
+        </div>
+        <div
+          id="new-transform-form-container"
+          style="
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #1f1f1f;
+            border: 1px solid #555;
+            border-radius: 4px;
+          "
+        ></div>
+        <div
+          id="animframe-details-content"
+          style="
+            font-size: 11px;
+            color: #ccc;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+          "
+        >
+          <span style="color: #888; font-style: italic"
+            >Select an animation frame to view details.</span
+          >
+        </div>
+      </div>
+
+      <div id="vertex-label-panel" class="label-panel-common">
+        <h3>Vertex Labels</h3>
+        <div class="label-controls">
+          <button id="clear-vertex-labels" class="label-control-btn">
+            Clear Vertex Selection
+          </button>
+        </div>
+        <div id="vertex-label-list" class="label-list-common"></div>
+      </div>
+
+      <div id="label-panel" class="label-panel-common">
+        <h3>Face Labels</h3>
+        <div class="label-controls">
+          <button id="clear-labels" class="label-control-btn">
+            Clear Face Selection
+          </button>
+        </div>
+        <div id="label-list" class="label-list-common"></div>
+      </div>
+
+      <div id="loading">Loading files...</div>
+    </div>
+    <script type="module">
+      import App from "./src/App";
+      const app = new App();
+    </script>
+  </body>
+</html>
