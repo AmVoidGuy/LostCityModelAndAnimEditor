@@ -198,8 +198,8 @@ export default class Model {
   private baseScaleX: number = 128;
   private baseScaleY: number = 128;
   private baseScaleZ: number = 128;
-  faceLabelForExport: Int32Array<ArrayBuffer> | undefined;
-  vertexLabelForExport: Int32Array<ArrayBuffer> | undefined;
+  faceLabelForExport: Int32Array | undefined;
+  vertexLabelForExport: Int32Array | undefined;
 
   constructor(type: ModelType) {
     this.vertexCount = type.vertexCount;

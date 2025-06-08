@@ -626,6 +626,7 @@ export default class App {
     viewModeSelect.addEventListener("change", () => {
       this.updateModelListUI();
       this.updateExportButtonState();
+      this.updateLabelsEditBoxes();
     });
 
     this.exportModelButton.addEventListener("click", () =>
@@ -633,6 +634,24 @@ export default class App {
     );
     this.updateExportButtonState();
   }
+
+  updateLabelsEditBoxes() {
+    const viewModeSelect = document.getElementById("view-mode-select") as HTMLSelectElement;
+    const selectedMode = viewModeSelect.value;
+
+    const isNpcMode = selectedMode === "npcs";
+
+    if (this.changeVertexLabels) {
+      this.changeVertexLabels.disabled = isNpcMode;
+      this.changeVertexLabels.checked = isNpcMode ? false : this.changeVertexLabels.checked;
+    }
+
+    if (this.changeFaceLabels) {
+      this.changeFaceLabels.disabled = isNpcMode;
+      this.changeFaceLabels.checked = isNpcMode ? false : this.changeFaceLabels.checked;
+    }
+  }
+
 
   updateExportButtonState() {
     if (this.exportModelButton) {
@@ -670,10 +689,12 @@ export default class App {
         "change-face-labels"
     ) as HTMLInputElement;
     this.changeFaceLabels?.addEventListener("change", () => {
-    const selectedModel = this.viewer.getRenderer().selectedModel;
-    if (selectedModel) {
-      this.updateFaceLabelUI(selectedModel);
-    }})
+      const selectedModel = this.viewer.getRenderer().selectedModel;
+      if (selectedModel) {
+        this.updateFaceLabelUI(selectedModel);
+      }
+      this.updateLabelsEditBoxes();
+    })
   }
 
   initializeVertexLabelPanel() {
@@ -689,10 +710,12 @@ export default class App {
         "change-vertex-labels"
     ) as HTMLInputElement;
     this.changeVertexLabels?.addEventListener("change", () => {
-    const selectedModel = this.viewer.getRenderer().selectedModel;
-    if (selectedModel) {
-      this.updateVertexLabelUI(selectedModel);
-    }})
+      const selectedModel = this.viewer.getRenderer().selectedModel;
+      if (selectedModel) {
+        this.updateVertexLabelUI(selectedModel);
+      }
+      this.updateLabelsEditBoxes();
+    })
   }
 
   async updateModelListUI() {
