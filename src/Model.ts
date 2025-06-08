@@ -184,8 +184,8 @@ export default class Model {
   textureCoords: Int32Array;
   uvCoords: Float32Array2d;
 
-  private hadOriginalFaceLabels: boolean = false;
-  private hadOriginalVertexLabels: boolean = false;
+  hadOriginalFaceLabels: boolean = false;
+  hadOriginalVertexLabels: boolean = false;
   private hadOriginalFacePriorities: boolean = false;
   private hadOriginalFaceAlphas: boolean = false;
   private hadOriginalFaceInfos: boolean = false;
@@ -198,6 +198,8 @@ export default class Model {
   private baseScaleX: number = 128;
   private baseScaleY: number = 128;
   private baseScaleZ: number = 128;
+  faceLabelForExport: Int32Array | undefined;
+  vertexLabelForExport: Int32Array | undefined;
 
   constructor(type: ModelType) {
     this.vertexCount = type.vertexCount;
@@ -562,24 +564,30 @@ export default class Model {
     }
 
     if (this.hadOriginalFaceLabels) {
-      let actualFaceLabels: Uint8Array;
-      if (this.faceLabel) {
-        actualFaceLabels = Uint8Array.from(this.faceLabel);
+      let actualFaceLabels = new Uint8Array(this.faceCount).fill(0);
+
+      if ((this as any).faceLabelForExport instanceof Int32Array) {
+        const src = (this as any).faceLabelForExport as Int32Array;
+        console.log("Using faceLabelForExport in export:", src.slice(0, 20));
+        for (let i = 0; i < this.faceCount && i < src.length; i++) {
+          actualFaceLabels[i] = src[i];
+        }
       } else if (this.labelFaces) {
-        actualFaceLabels = new Uint8Array(this.faceCount).fill(0);
         for (let l = 0; l < this.labelFaces.length; l++) {
           const indices = this.labelFaces[l];
           if (indices) {
             for (let i = 0; i < indices.length; i++) {
-              if (indices[i] < this.faceCount) actualFaceLabels[indices[i]] = l;
+              if (indices[i] < this.faceCount) {
+                actualFaceLabels[indices[i]] = l;
+              }
             }
           }
         }
-      } else {
-        actualFaceLabels = new Uint8Array(this.faceCount).fill(0);
       }
+
       dataBlocks.push(actualFaceLabels);
     }
+
 
     if (this.hadOriginalFaceInfos) {
       const faceInfosData = this.faceInfo
@@ -589,25 +597,29 @@ export default class Model {
     }
 
     if (this.hadOriginalVertexLabels) {
-      let actualVertexLabels: Uint8Array;
-      if (this.vertexLabel) {
-        actualVertexLabels = Uint8Array.from(this.vertexLabel);
+      let actualVertexLabels = new Uint8Array(this.vertexCount).fill(0);
+
+      if ((this as any).vertexLabelForExport instanceof Int32Array) {
+        const src = (this as any).vertexLabelForExport as Int32Array;
+        for (let i = 0; i < this.vertexCount && i < src.length; i++) {
+          actualVertexLabels[i] = src[i];
+        }
       } else if (this.labelVertices) {
-        actualVertexLabels = new Uint8Array(this.vertexCount).fill(0);
         for (let l = 0; l < this.labelVertices.length; l++) {
           const indices = this.labelVertices[l];
           if (indices) {
             for (let i = 0; i < indices.length; i++) {
-              if (indices[i] < this.vertexCount)
+              if (indices[i] < this.vertexCount) {
                 actualVertexLabels[indices[i]] = l;
+              }
             }
           }
         }
-      } else {
-        actualVertexLabels = new Uint8Array(this.vertexCount).fill(0);
       }
+
       dataBlocks.push(actualVertexLabels);
     }
+
 
     if (this.hadOriginalFaceAlphas) {
       const faceAlphasData = this.faceAlpha

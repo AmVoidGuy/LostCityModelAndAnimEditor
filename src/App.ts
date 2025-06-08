@@ -124,6 +124,8 @@ export default class App {
   modelSearchInput: HTMLInputElement;
   seqSearchInput: HTMLInputElement;
   exportModelButton: HTMLButtonElement | null;
+  changeFaceLabels: HTMLInputElement | null;
+  changeVertexLabels: HTMLInputElement | null;
 
   constructor() {
     this.container = document.getElementById("container");
@@ -151,6 +153,8 @@ export default class App {
     };
     this.currentSelectedAnimFrameInstance = null;
     this.loopSequenceCheckbox = null;
+    this.changeFaceLabels = null;
+    this.changeVertexLabels = null;
     this.modelSearchInput = document.getElementById(
       "model-search"
     ) as HTMLInputElement;
@@ -622,6 +626,7 @@ export default class App {
     viewModeSelect.addEventListener("change", () => {
       this.updateModelListUI();
       this.updateExportButtonState();
+      this.updateLabelsEditBoxes();
     });
 
     this.exportModelButton.addEventListener("click", () =>
@@ -629,6 +634,24 @@ export default class App {
     );
     this.updateExportButtonState();
   }
+
+  updateLabelsEditBoxes() {
+    const viewModeSelect = document.getElementById("view-mode-select") as HTMLSelectElement;
+    const selectedMode = viewModeSelect.value;
+
+    const isNpcMode = selectedMode === "npcs";
+
+    if (this.changeVertexLabels) {
+      this.changeVertexLabels.disabled = isNpcMode;
+      this.changeVertexLabels.checked = isNpcMode ? false : this.changeVertexLabels.checked;
+    }
+
+    if (this.changeFaceLabels) {
+      this.changeFaceLabels.disabled = isNpcMode;
+      this.changeFaceLabels.checked = isNpcMode ? false : this.changeFaceLabels.checked;
+    }
+  }
+
 
   updateExportButtonState() {
     if (this.exportModelButton) {
@@ -662,6 +685,16 @@ export default class App {
       '<div class="label-item no-labels"><span style="color: #888; font-style: italic;">No model loaded</span></div>';
     (document.getElementById("clear-labels") as HTMLButtonElement).disabled =
       true;
+    this.changeFaceLabels = document.getElementById(
+        "change-face-labels"
+    ) as HTMLInputElement;
+    this.changeFaceLabels?.addEventListener("change", () => {
+      const selectedModel = this.viewer.getRenderer().selectedModel;
+      if (selectedModel) {
+        this.updateFaceLabelUI(selectedModel);
+      }
+      this.updateLabelsEditBoxes();
+    })
   }
 
   initializeVertexLabelPanel() {
@@ -673,6 +706,16 @@ export default class App {
     (
       document.getElementById("clear-vertex-labels") as HTMLButtonElement
     ).disabled = true;
+    this.changeVertexLabels = document.getElementById(
+        "change-vertex-labels"
+    ) as HTMLInputElement;
+    this.changeVertexLabels?.addEventListener("change", () => {
+      const selectedModel = this.viewer.getRenderer().selectedModel;
+      if (selectedModel) {
+        this.updateVertexLabelUI(selectedModel);
+      }
+      this.updateLabelsEditBoxes();
+    })
   }
 
   async updateModelListUI() {
@@ -1077,6 +1120,85 @@ export default class App {
     }
   }
 
+  buildRemappedFaceArray(model: Model, map: Record<number, number>): Int32Array {
+    const out = new Int32Array(model.faceCount).fill(0);
+
+    if (model.labelFaces) {
+      model.labelFaces.forEach((faces, grp) => {
+        if (!faces) return;
+        const target = map[grp] ?? grp;
+        for (let i = 0; i < faces.length; i++) out[faces[i]] = target;
+      });
+    }
+
+    return out;
+  }
+
+  buildRemappedVertexArray(model: Model, map: Record<number, number>): Int32Array {
+    const out = new Int32Array(model.vertexCount).fill(0);
+
+    if (model.labelVertices) {
+      model.labelVertices.forEach((verts, grp) => {
+        if (!verts) return;
+        const target = map[grp] ?? grp;
+        for (let i = 0; i < verts.length; i++) out[verts[i]] = target;
+      });
+    }
+
+    return out;
+  }
+
+  applyCustomFaceLabels(model: Model) {
+    const mapping: Record<number, number> = {};
+    const labelItems = document.querySelectorAll("#label-list .label-item");
+
+    labelItems.forEach((item) => {
+      const labelText = item.querySelector("span")?.textContent;
+      const input = item.querySelector("input") as HTMLInputElement;
+
+      if (!labelText || !input) return;
+
+      const match = labelText.match(/Label\s+(\d+)/);
+      if (!match) return;
+
+      const originalId = parseInt(match[1]);
+      const newId = parseInt(input.value);
+
+      if (!isNaN(newId) && newId !== originalId) {
+        mapping[originalId] = newId;
+      }
+    });
+
+    model.faceLabelForExport = this.buildRemappedFaceArray(model, mapping);
+    model.hadOriginalFaceLabels = true;
+}
+
+
+  applyCustomVertexLabels(model: Model) {
+    const mapping: Record<number, number> = {};
+    const labelItems = document.querySelectorAll("#vertex-label-list .label-item");
+
+    labelItems.forEach((item) => {
+      const labelText = item.querySelector("span")?.textContent;
+      const input = item.querySelector("input") as HTMLInputElement;
+
+      if (!labelText || !input) return;
+
+      const match = labelText.match(/Label\s+(\d+)/);
+      if (!match) return;
+
+      const originalId = parseInt(match[1]);
+      const newId = parseInt(input.value);
+
+      if (!isNaN(newId) && newId !== originalId) {
+        mapping[originalId] = newId;
+      }
+    });
+
+    model.vertexLabelForExport = this.buildRemappedVertexArray(model, mapping);
+    model.hadOriginalVertexLabels = true;
+}
+
   async handleExportAnimFrame() {
     if (
       !this.currentSelectedAnimFrameInstance ||
@@ -1177,6 +1299,13 @@ export default class App {
       alert("Selected model instance not found.");
       this.updateExportButtonState();
       return;
+    }
+
+    if (this.changeFaceLabels?.checked && modelInstance) {
+      this.applyCustomFaceLabels(modelInstance);
+    }
+    if (this.changeVertexLabels?.checked && modelInstance) {
+      this.applyCustomVertexLabels(modelInstance);
     }
 
     try {
@@ -2416,7 +2545,26 @@ export default class App {
     labels.forEach((label) => {
       const item = document.createElement("div");
       item.className = "label-item";
-      item.innerHTML = `<span>Label ${label.id}</span><span class="label-count">${label.faceCount} faces</span>`;
+
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = `Label ${label.id}`;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = label.id.toString(); // or leave blank if editable name
+      input.className = "label-edit-input";
+      input.style.marginLeft = "8px";
+      input.style.width = "40px";
+      input.disabled = !this.changeFaceLabels?.checked
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "label-count";
+      countSpan.textContent = `${label.faceCount} faces`;
+
+      item.appendChild(labelSpan);
+      item.appendChild(input);
+      item.appendChild(countSpan);
+
       item.addEventListener("click", () => {
         document
           .querySelectorAll("#label-list .label-item")
@@ -2444,7 +2592,26 @@ export default class App {
     labels.forEach((label) => {
       const item = document.createElement("div");
       item.className = "label-item";
-      item.innerHTML = `<span>Label ${label.id}</span><span class="label-count">${label.vertexCount} vertices</span>`;
+
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = `Label ${label.id}`;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = label.id.toString();
+      input.className = "label-edit-input";
+      input.style.marginLeft = "8px";
+      input.style.width = "40px";
+      input.disabled = !this.changeVertexLabels?.checked;
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "label-count";
+      countSpan.textContent = `${label.vertexCount} vertices`;
+
+      item.appendChild(labelSpan);
+      item.appendChild(input);
+      item.appendChild(countSpan);
+
       item.addEventListener("click", () => {
         if (!this.viewer.getRenderer().editMode) {
           alert("Enable Vertex Editing mode to highlight vertex labels.");
@@ -2452,14 +2619,14 @@ export default class App {
         }
         document
           .querySelectorAll("#vertex-label-list .label-item")
-          .forEach((el) =>
-            el.classList.remove("selected", "highlighted-vertex")
-          );
+          .forEach((el) => el.classList.remove("selected", "highlighted-vertex"));
         item.classList.add("highlighted-vertex");
         this.viewer.getRenderer().highlightVertexLabel(label.id);
       });
+
       list.appendChild(item);
     });
+
   }
 
   updateVertexLabelUIState() {
