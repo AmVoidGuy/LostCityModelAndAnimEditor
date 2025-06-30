@@ -47,6 +47,37 @@ export default class AnimBase {
     return instance;
   }
 
+  static convertFromData377(id: number, fileData: Packet): AnimBase {
+      const instance = new AnimBase();
+      instance.id = id;
+
+      const length = fileData.g1();
+      instance.animLength = length;
+
+      const types = new Uint8Array(length);
+      const labels = new Array<Uint8Array>(length);
+
+      for (let i = 0; i < length; i++) {
+          types[i] = fileData.g1();
+      }
+
+      for (let i = 0; i < length; i++) {
+          const labelCount = fileData.g1();
+          const groupLabels = new Uint8Array(labelCount);
+
+          for (let j = 0; j < labelCount; j++) {
+              groupLabels[j] = fileData.g1();
+          }
+          labels[i] = groupLabels;
+      }
+      
+      instance.animTypes = types;
+      instance.animLabels = labels;
+
+      AnimBase.instances[id] = instance;
+      return instance;
+  }
+
   animLength: number = 0;
   animTypes: Uint8Array | null = null;
   animLabels: (Uint8Array | null)[] | null = null;

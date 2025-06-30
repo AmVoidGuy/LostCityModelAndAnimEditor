@@ -1,5 +1,6 @@
 import AnimBase from "./AnimBase";
 import AnimFrame from "./AnimFrame";
+import AnimSet from "./AnimSet";
 import Model from "./Model";
 import Packet from "./Packet";
 import ColorConversion from "./ColorConversion";
@@ -924,6 +925,10 @@ export default class FileLoader {
       file.name.toLowerCase().endsWith(".seq")
     );
 
+    const animsetFiles = Array.from(files).filter((file) =>
+      file.name.toLowerCase().endsWith(".anim")
+    );
+
     const baseFiles = Array.from(files).filter((file) =>
       file.name.toLowerCase().endsWith(".base")
     );
@@ -1030,6 +1035,17 @@ export default class FileLoader {
       }
     }
 
+    for (const file of animsetFiles) {
+      try {
+        const parts = file.name.split("_");
+        const idString = parts[parts.length - 1];
+        const currentId = parseInt(idString, 10);
+        await this.convertAnimset(currentId, file);
+      } catch (error) {
+        console.error(`Error processing Animset file ${file.name}:`, error);
+      }
+    }
+
     for (const file of baseFiles) {
       try {
         const parts = file.name.split("_");
@@ -1107,6 +1123,12 @@ export default class FileLoader {
     const uint8View = new Uint8Array(arrayBuffer);
     const data = new Packet(uint8View);
     return Model.convertFromData(data);
+  }
+
+  async convertAnimset(currentId: number, file: File): Promise<void> {
+    const arrayBuffer = await this.readFileAsArrayBuffer(file);
+    const uint8View = new Uint8Array(arrayBuffer);
+    AnimSet.convertFromData(currentId, uint8View);
   }
 
   async convertBase(currentId: number, file: File): Promise<void> {
