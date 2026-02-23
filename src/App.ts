@@ -1,5 +1,6 @@
 import AnimBase from "./AnimBase";
 import AnimFrame from "./AnimFrame";
+import AnimSet from "./AnimSet";
 import Model from "./Model";
 import FileLoader from "./FileLoader";
 import ModelViewer from "./ModelViewer";
@@ -163,6 +164,7 @@ export default class App {
     ) as HTMLInputElement;
     this.exportModelButton = null;
     this.setupUI();
+    this.setupAnimsetTools();
     this.setupFaceLabelUI();
     this.setupVertexLabelUI();
     this.initializeFaceLabelPanel();
@@ -176,6 +178,115 @@ export default class App {
     );
     this.seqSearchInput.addEventListener("input", () => this.filterSeqList());
   }
+
+setupAnimsetTools() {
+    const convertBtn = document.getElementById('import-animset-btn');
+    const exportBtn = document.getElementById('export-animset-btn');
+    const copySeqBtn = document.getElementById('copy-seq-btn');
+    const fileInput = document.getElementById('anim-import-input') as HTMLInputElement;
+
+    exportBtn?.addEventListener('click', () => {
+        const selectedSeqItem = document.querySelector("#seq-list .label-item.selected");
+        if (!selectedSeqItem) return alert("Select a SEQ first.");
+        
+        const seqId = selectedSeqItem.textContent!;
+        const seqData = this.loader.getSeqData(seqId);
+        const firstFrameName = seqData?.frameIds?.[0];
+        if (!firstFrameName) return alert("SEQ has no frames.");
+
+        const oldId = parseInt(firstFrameName.split('_').pop()!);
+        const baseId = AnimFrame.instances[oldId]?.base?.id;
+        
+        if (baseId === undefined) return alert("Could not resolve Base ID.");
+
+        const data = AnimSet.exportAnimSet(baseId);
+        const blob = new Blob([data], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `anim_${baseId}.anim`;
+        link.click();
+    });
+
+    copySeqBtn?.addEventListener('click', async () => {
+        const selectedSeqItem = document.querySelector("#seq-list .label-item.selected");
+        if (!selectedSeqItem) return alert("Select a SEQ first.");
+        
+        const seqId = selectedSeqItem.textContent!;
+        const data = this.loader.getSeqData(seqId);
+        
+        let txt = `[${seqId}]\n`;
+        data?.frameIds?.forEach((f, i) => {
+            if (f) txt += `frame${i+1}=${f}\n`;
+        });
+        data?.delayValues?.forEach((d, i) => {
+            if (d !== undefined && d > 0) txt += `delay${i+1}=${d}\n`;
+        });
+        if (data?.replayoff !== undefined && data.replayoff !== -1) txt += `replayoff=${data.replayoff}\n`;
+
+        try {
+            await navigator.clipboard.writeText(txt);
+            console.log("Copied current SEQ to clipboard:\n", txt);
+            alert("Current .seq config copied to clipboard!");
+        } catch (err) {
+            prompt("Clipboard blocked. Copy the config from here:", txt);
+        }
+    });
+
+    convertBtn?.addEventListener('click', () => fileInput.click());
+
+    fileInput?.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    const nameParts = file.name.split('_');
+    const lastPart = nameParts[nameParts.length - 1];
+    const originalBaseId = parseInt(lastPart, 10);
+
+    if (isNaN(originalBaseId)) {
+        return alert("Could not determine Original Base ID from filename. Filename must end in _ID.anim");
+    }
+
+    const data = new Uint8Array(await file.arrayBuffer());
+    const result = await AnimSet.importWithConflictCheck(data, originalBaseId);
+
+        console.log("%c--- ANIMSET CONVERSION SUCCESSFUL ---", "color: green; font-weight: bold;");
+
+        try {
+            const exportedData = AnimSet.exportAnimSet(result.baseId);
+            const blob = new Blob([exportedData], { type: 'application/octet-stream' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `anim_${result.baseId}.anim`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+            console.log(`Auto-exported converted file: anim_${result.baseId}.anim`);
+        } catch (exportErr) {
+            console.error("Auto-export failed:", exportErr);
+        }
+
+        const oldConfig = prompt("AnimSet converted! To update your .seq config, paste the original [sequence] text here:");
+        
+        if (oldConfig) {
+            const newConfig = AnimSet.remapSeqConfig(oldConfig, result.mapping);
+            console.log("%c--- UPDATED SEQ CONFIG ---", "color: cyan; font-weight: bold;");
+            console.log(newConfig);
+            await navigator.clipboard.writeText(newConfig);
+        }
+
+        let packTxt = `--- ADD TO base.pack ---\n${result.baseId}=base_${result.baseId}\n\n`;
+        packTxt += `--- ADD TO animset.pack ---\n${result.baseId}=anim_${result.baseId}\n\n`;
+        packTxt += `--- ADD TO anim.pack ---\n`;
+        result.mapping.forEach((newId) => {
+            packTxt += `${newId}=anim_${newId}\n`;
+        });
+        console.log("%c--- PACK FILE ENTRIES ---", "color: orange; font-weight: bold;");
+        console.log(packTxt);
+        alert("Remapping Complete!\n1. The new SEQ config should be on your clipboard.\n2. Pack file entries have been printed to the Console (F12).\n-Please place your new .anim file in /Content/models/ \n-Update all files listed in the console.\n\nIf you want to map additional seqs under that animset, you have to manually convert config to new frame ids. \n*Note*\nIf converting part of a larger model, animations can still be partially broken");
+
+        this.updateSeqListUI();
+        fileInput.value = '';
+    });
+}
 
   filterModelList() {
     const modelList = document.getElementById("model-list")!;

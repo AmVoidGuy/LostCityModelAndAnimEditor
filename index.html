@@ -71,44 +71,37 @@
         <div id="face-details"></div>
       </div>
 
-      <div id="seq-list-panel" class="label-panel-common">
-        <h3>Sequences</h3>
-        <div class="label-controls">
-          <button
-            id="clear-seq"
-            class="label-control-btn"
-            style="margin-left: 5px; margin-bottom: 5px"
-          >
-            Stop Current Sequence
-          </button>
-          <button
-            id="start-seq"
-            class="label-control-btn"
-            style="margin-left: 5px; margin-bottom: 5px"
-          >
-            Start Current Sequence
-          </button>
-          <div style="margin-top: 8px; display: flex; align-items: center">
-            <input
-              type="checkbox"
-              id="loop-sequence-checkbox"
-              style="margin-right: 5px"
-            />
-            <label
-              for="loop-sequence-checkbox"
-              style="font-size: 11px; color: #ccc"
-              >Loop Sequence</label
-            >
-          </div>
-        </div>
-        <input
-          type="text"
-          id="seq-search"
-          class="search-bar"
-          placeholder="Search sequences..."
-        />
-        <div id="seq-list" class="label-list-common"></div>
-      </div>
+<div id="seq-list-panel" class="label-panel-common">
+  <h3>Sequences</h3>
+  
+  <div class="label-controls">
+    <div style="margin-bottom: 8px;">
+      <button id="clear-seq" class="label-control-btn">Stop Current Sequence</button>
+      <button id="start-seq" class="label-control-btn">Start Current Sequence</button>
+    </div>
+
+    <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+      <button id="import-animset-btn" class="label-control-btn" style="background:#2e4a2e; flex: 1;">Convert AnimSet</button>
+      <button id="export-animset-btn" class="label-control-btn" style="background:#4a2e2e; flex: 1;">Export AnimSet</button>
+      <button id="copy-seq-btn" class="label-control-btn" style="flex: 1;">Copy .Seq</button>
+    </div>
+
+    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+      <input type="checkbox" id="loop-sequence-checkbox" style="margin-right: 5px" />
+      <label for="loop-sequence-checkbox" style="font-size: 11px; color: #ccc">Loop Sequence</label>
+    </div>
+  </div>
+
+  <input type="file" id="anim-import-input" accept=".anim" style="display:none" />
+
+  <input
+    type="text"
+    id="seq-search"
+    class="search-bar"
+    placeholder="Search sequences..."
+  />
+  <div id="seq-list" class="label-list-common"></div>
+</div>
 
       <div id="animframe-list-panel" class="label-panel-common">
         <h3>Animation Frames</h3>

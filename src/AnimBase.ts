@@ -4,6 +4,14 @@ import { TypedArray1d } from "./Arrays.js";
 export default class AnimBase {
   static instances: AnimBase[] = [];
 
+  static isIdTaken(id: number): boolean {
+      return !!this.instances[id];
+  }
+  static getNextAvailableId(): number {
+      const keys = Object.keys(this.instances).map(Number);
+      return keys.length === 0 ? 0 : Math.max(...keys) + 1;
+  }
+
   static convertFromData(id: number, fileData: Packet) {
     fileData.pos = fileData.data.length - 4;
     const typeSectionLength = fileData.g2();

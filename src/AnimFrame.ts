@@ -16,6 +16,18 @@ export default class AnimFrame {
   private originalGroupCount: number | null = null;
   private isModified: boolean = false;
 
+  static isIdTaken(id: number): boolean {
+      return !!this.instances[id];
+  }
+  static getNextAvailableId(): number {
+      const keys = Object.keys(this.instances).map(Number);
+      return keys.length === 0 ? 0 : Math.max(...keys) + 1;
+  }
+
+  static getFramesByBaseId(baseId: number): AnimFrame[] {
+    return Object.values(this.instances).filter(f => f.base && f.base.id === baseId);
+  }
+
   static convertFromData(id: number, fileData: Packet): AnimFrame {
     fileData.pos = fileData.data.length - 8;
     const headLength = fileData.g2();
