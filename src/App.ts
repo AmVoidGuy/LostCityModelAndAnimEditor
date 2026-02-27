@@ -2882,19 +2882,57 @@ async getModelFileFromUser(): Promise<File | null> {
   }
 
   setupVertexLabelUI() {
-    const clearBtn = document.getElementById(
-      "clear-vertex-labels"
-    ) as HTMLButtonElement;
+    const clearBtn = document.getElementById("clear-vertex-labels") as HTMLButtonElement;
+    const convertBtn = document.getElementById("convert-vertex-labels") as HTMLButtonElement;
+    const fileInput = document.getElementById("model-relabel-input") as HTMLInputElement;
 
     clearBtn.addEventListener("click", () => {
       if (clearBtn.disabled) return;
       this.viewer.getRenderer().clearVertexHighlights();
-      document
-        .querySelectorAll("#vertex-label-list .label-item")
-        .forEach((el) => el.classList.remove("selected", "highlighted-vertex"));
-      document
-        .querySelectorAll("#vertex-label-panel .label-control-btn")
-        .forEach((el) => el.classList.remove("active"));
+      document.querySelectorAll("#vertex-label-list .label-item").forEach((el) => el.classList.remove("selected", "highlighted-vertex"));
+    });
+
+    convertBtn?.addEventListener('click', () => fileInput.click());
+
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      const options = await this.showConversionOptionsModal();
+      if (!options) {
+        fileInput.value = '';
+        return;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const packet = new Packet(new Uint8Array(buffer));
+        const tempModel = Model.convertFromData(packet);
+        tempModel.createLabelReferences();
+
+        if (options.revisionDir === '377to274') {
+          AnimSet.applyModelRelabel377To274(tempModel);
+          console.log(`Relabeled ${file.name} (377 -> 274)`);
+        }
+
+        const exportedData = tempModel.exportToOb2();
+
+        const blob = new Blob([exportedData], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+
+        alert("Model labels converted and downloaded successfully.");
+      } catch (err: any) {
+        console.error("Model conversion failed:", err);
+        alert("Error: " + err.message);
+      } finally {
+        fileInput.value = '';
+      }
     });
   }
 }
