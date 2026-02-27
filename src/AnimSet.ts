@@ -243,7 +243,7 @@ static remapLabels377To274(sourceBaseId: number): number | null {
     return updatedText;
   }
 
-static async importWithConflictCheck(fileData: Uint8Array, originalBaseId: number) {
+static async importWithConflictCheck(fileData: Uint8Array) {
     const footer = new Packet(fileData);
     footer.pos = fileData.length - 8;
     const metaSize = footer.g2();

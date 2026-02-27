@@ -267,7 +267,7 @@ setupAnimsetTools() {
       }
 
       const data = new Uint8Array(await file.arrayBuffer());
-      const result = await AnimSet.importWithConflictCheck(data, originalBaseId);
+      const result = await AnimSet.importWithConflictCheck(data);
 
       let finalBaseId: number;
       if (isPlayerEquipment && revisionDir === '377to274') {
