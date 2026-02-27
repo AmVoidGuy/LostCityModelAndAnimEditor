@@ -4,6 +4,7 @@ import AnimSet from "./AnimSet";
 import Model from "./Model";
 import FileLoader from "./FileLoader";
 import ModelViewer from "./ModelViewer";
+import Packet from "./Packet";
 
 const LocShapeSuffixMap = {
   _1: 0,
@@ -235,58 +236,171 @@ setupAnimsetTools() {
     convertBtn?.addEventListener('click', () => fileInput.click());
 
     fileInput?.addEventListener('change', async () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
+      const file = fileInput.files?.[0];
+      if (!file) return;
 
-    const nameParts = file.name.split('_');
-    const lastPart = nameParts[nameParts.length - 1];
-    const originalBaseId = parseInt(lastPart, 10);
+      const nameParts = file.name.split('_');
+      const originalBaseId = parseInt(nameParts[nameParts.length - 1], 10);
+      if (isNaN(originalBaseId)) {
+          return alert("Could not determine Original Base ID from filename. Filename must end in _ID.anim");
+      }
 
-    if (isNaN(originalBaseId)) {
-        return alert("Could not determine Original Base ID from filename. Filename must end in _ID.anim");
-    }
+      const options = await this.showConversionOptionsModal();
+      if (!options) {
+          fileInput.value = '';
+          return;
+      }
 
-    const data = new Uint8Array(await file.arrayBuffer());
-    const result = await AnimSet.importWithConflictCheck(data, originalBaseId);
+      const { revisionDir, isPlayerEquipment } = options;
 
-        console.log("%c--- ANIMSET CONVERSION SUCCESSFUL ---", "color: green; font-weight: bold;");
+      let modelToRelabel: Model | null = null;
+      let originalModelName = "relabeled_model.ob2";
 
-        try {
-            const exportedData = AnimSet.exportAnimSet(result.baseId);
-            const blob = new Blob([exportedData], { type: 'application/octet-stream' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `anim_${result.baseId}.anim`;
-            link.click();
-            URL.revokeObjectURL(link.href);
-            console.log(`Auto-exported converted file: anim_${result.baseId}.anim`);
-        } catch (exportErr) {
-            console.error("Auto-export failed:", exportErr);
+      if (isPlayerEquipment && revisionDir === '377to274') {
+        const modelFile = await this.getModelFileFromUser();
+        if (modelFile) {
+            originalModelName = modelFile.name;
+            const modelBuffer = await modelFile.arrayBuffer();
+            modelToRelabel = Model.convertFromData(new Packet(new Uint8Array(modelBuffer)));
+            modelToRelabel.createLabelReferences();
         }
+      }
 
-        const oldConfig = prompt("AnimSet converted! To update your .seq config, paste the original [sequence] text here:");
-        
-        if (oldConfig) {
-            const newConfig = AnimSet.remapSeqConfig(oldConfig, result.mapping);
-            console.log("%c--- UPDATED SEQ CONFIG ---", "color: cyan; font-weight: bold;");
-            console.log(newConfig);
-            await navigator.clipboard.writeText(newConfig);
-        }
+      const data = new Uint8Array(await file.arrayBuffer());
+      const result = await AnimSet.importWithConflictCheck(data, originalBaseId);
 
-        let packTxt = `--- ADD TO base.pack ---\n${result.baseId}=base_${result.baseId}\n\n`;
-        packTxt += `--- ADD TO animset.pack ---\n${result.baseId}=anim_${result.baseId}\n\n`;
-        packTxt += `--- ADD TO anim.pack ---\n`;
-        result.mapping.forEach((newId) => {
-            packTxt += `${newId}=anim_${newId}\n`;
-        });
-        console.log("%c--- PACK FILE ENTRIES ---", "color: orange; font-weight: bold;");
-        console.log(packTxt);
-        alert("Remapping Complete!\n1. The new SEQ config should be on your clipboard.\n2. Pack file entries have been printed to the Console (F12).\n-Please place your new .anim file in /Content/models/ \n-Update all files listed in the console.\n\nIf you want to map additional seqs under that animset, you have to manually convert config to new frame ids. \n*Note*\nIf converting part of a larger model, animations can still be partially broken");
+      let finalBaseId: number;
+      if (isPlayerEquipment && revisionDir === '377to274') {
+          if (modelToRelabel) {
+              AnimSet.applyModelRelabel377To274(modelToRelabel);
+              const relabeledOb2 = modelToRelabel.exportToOb2();
+              const modelBlob = new Blob([relabeledOb2], { type: 'application/octet-stream' });
+              const modelLink = document.createElement('a');
+              modelLink.href = URL.createObjectURL(modelBlob);
+              modelLink.download = originalModelName;
+              modelLink.click();
+              console.log("Model relabeled and exported.");
+          }
+          finalBaseId = AnimSet.remapLabels377To274(result.baseId) ?? result.baseId;
+      } else {
+          finalBaseId = result.baseId;
+      }
 
-        this.updateSeqListUI();
-        fileInput.value = '';
+      console.log("%c--- ANIMSET CONVERSION SUCCESSFUL ---", "color:green; font-weight:bold;");
+
+      try {
+          const exportedData = AnimSet.exportAnimSet(finalBaseId);
+          const blob = new Blob([exportedData], { type: 'application/octet-stream' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `anim_${finalBaseId}.anim`;
+          link.click();
+          URL.revokeObjectURL(link.href);
+          console.log(`Auto-exported converted file: anim_${finalBaseId}.anim`);
+      } catch (exportErr) {
+          console.error("Auto-export failed:", exportErr);
+      }
+
+      const oldConfig = prompt("AnimSet converted! To update your .seq config, paste the original [sequence] text here:");
+      if (oldConfig) {
+          const newConfig = AnimSet.remapSeqConfig(oldConfig, result.mapping);
+          console.log("%c--- UPDATED SEQ CONFIG ---", "color:cyan; font-weight:bold;");
+          console.log(newConfig);
+          await navigator.clipboard.writeText(newConfig);
+      }
+
+      let packTxt = `--- ADD TO base.pack ---\n${finalBaseId}=base_${finalBaseId}\n\n`;
+      packTxt += `--- ADD TO animset.pack ---\n${finalBaseId}=anim_${finalBaseId}\n\n`;
+      packTxt += `--- ADD TO anim.pack ---\n`;
+      result.mapping.forEach((newId) => { packTxt += `${newId}=anim_${newId}\n`; });
+      console.log("%c--- PACK FILE ENTRIES ---", "color:orange; font-weight:bold;");
+      console.log(packTxt);
+
+      alert(
+          "Remapping Complete!\n" +
+          "1. The new SEQ config should be on your clipboard.\n" +
+          "2. Pack file entries have been printed to the Console (F12).\n" +
+          "-Please place your new .anim file in /Content/models/\n" +
+          "-Update all files listed in the console.\n\n" +
+          "If you want to map additional seqs under that animset, you have to manually convert config to new frame ids.\n"
+      );
+
+      this.updateSeqListUI();
+      fileInput.value = '';
+    });
+  }
+
+async getModelFileFromUser(): Promise<File | null> {
+    const proceed = confirm(
+        "Player equipment or weapons require the model's vertex labels to be remapped.\n\n" +
+        "Do you have the associated .ob2 model file?\n\n" +
+        "OK = select file, Cancel = skip model relabeling."
+    );
+
+    if (!proceed) return null;
+
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.ob2';
+
+        let settled = false;
+
+        input.onchange = () => {
+            if (settled) return;
+            settled = true;
+            window.removeEventListener('focus', onFocus);
+            resolve(input.files?.[0] ?? null);
+        };
+
+        const onFocus = () => {
+            setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    resolve(null);
+                }
+            }, 300);
+        };
+
+        input.click();
+
+        setTimeout(() => {
+            window.addEventListener('focus', onFocus, { once: true });
+        }, 500);
     });
 }
+
+  showConversionOptionsModal(): Promise<{ revisionDir: string; isPlayerEquipment: boolean } | null> {
+    return new Promise((resolve) => {
+        const overlay    = document.getElementById('animset-modal-overlay')!;
+        const cancelBtn  = document.getElementById('animset-modal-cancel')!;
+        const confirmBtn = document.getElementById('animset-modal-confirm')!;
+        const select     = document.getElementById('animset-revision-select') as HTMLSelectElement;
+        const checkbox   = document.getElementById('animset-is-player') as HTMLInputElement;
+
+        overlay.style.display = 'flex';
+
+        const cleanup = () => { overlay.style.display = 'none'; };
+
+        const onCancel = () => {
+            cleanup();
+            cancelBtn.removeEventListener('click', onCancel);
+            confirmBtn.removeEventListener('click', onConfirm);
+            resolve(null);
+        };
+
+        const onConfirm = () => {
+            const result = { revisionDir: select.value, isPlayerEquipment: checkbox.checked };
+            cleanup();
+            cancelBtn.removeEventListener('click', onCancel);
+            confirmBtn.removeEventListener('click', onConfirm);
+            resolve(result);
+        };
+
+        cancelBtn.addEventListener('click', onCancel);
+        confirmBtn.addEventListener('click', onConfirm);
+    });
+  }
 
   filterModelList() {
     const modelList = document.getElementById("model-list")!;

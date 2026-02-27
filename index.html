@@ -201,6 +201,36 @@
       </div>
 
       <div id="loading">Loading files...</div>
+<div id="animset-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; z-index:9999;">
+  <div style="background:#2b2b2b; border:1px solid #555; border-radius:8px; padding:24px; min-width:340px; color:#eee; font-family:sans-serif; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    
+    <h3 style="margin:0 0 16px; font-size:15px; color:#fff;">AnimSet Conversion Options</h3>
+
+    <label for="animset-revision-select" style="display:block; margin-bottom:6px; font-size:12px; color:#aaa;">
+      Convert revision WIP: Only one conversion available now
+    </label>
+    <select id="animset-revision-select" style="width:100%; padding:6px 8px; border-radius:4px; background:#1a1a1a; color:#eee; border:1px solid #555; font-size:13px; margin-bottom:16px;">
+      <option value="377to274">274 from 377 &nbsp;(377 → 274)</option>
+    </select>
+
+    <label style="display:flex; align-items:center; gap:10px; font-size:13px; color:#ccc; cursor:pointer; margin-bottom:6px;">
+      <input type="checkbox" id="animset-is-player" style="width:15px; height:15px;">
+      <span>This animation belongs to <strong style="color:#fff;">player equipment or weapons</strong></span>
+    </label>
+    <div style="font-size:11px; color:#777; margin-bottom:20px; padding-left:25px;">
+      Uncheck for non-human animations — skips label remapping.
+    </div>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button id="animset-modal-confirm" style="padding:7px 16px; border-radius:4px; border:none; background:#4a8fff; color:#fff; cursor:pointer; font-size:13px;">
+        Convert
+      </button>
+      <button id="animset-modal-cancel" style="padding:7px 16px; border-radius:4px; border:1px solid #555; background:#333; color:#ccc; cursor:pointer; font-size:13px;">
+        Cancel
+      </button>
+    </div>
+
+  </div>
+</div>
     </div>
     <script type="module">
       import App from "./src/App";
