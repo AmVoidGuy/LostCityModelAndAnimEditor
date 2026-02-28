@@ -256,7 +256,7 @@ setupAnimsetTools() {
       let modelToRelabel: Model | null = null;
       let originalModelName = "relabeled_model.ob2";
 
-      if (isPlayerEquipment && revisionDir === '377to274') {
+      if (isPlayerEquipment) {
         const modelFile = await this.getModelFileFromUser();
         if (modelFile) {
             originalModelName = modelFile.name;
@@ -268,11 +268,11 @@ setupAnimsetTools() {
 
       const data = new Uint8Array(await file.arrayBuffer());
       const result = await AnimSet.importWithConflictCheck(data);
-
+      const { from: fromRev, to: toRev } = AnimSet.parseRevisionDir(revisionDir);
       let finalBaseId: number;
-      if (isPlayerEquipment && revisionDir === '377to274') {
+      if (isPlayerEquipment) {
           if (modelToRelabel) {
-              AnimSet.applyModelRelabel377To274(modelToRelabel);
+              AnimSet.applyModelRelabel(modelToRelabel, fromRev, toRev);
               const relabeledOb2 = modelToRelabel.exportToOb2();
               const modelBlob = new Blob([relabeledOb2], { type: 'application/octet-stream' });
               const modelLink = document.createElement('a');
@@ -281,7 +281,7 @@ setupAnimsetTools() {
               modelLink.click();
               console.log("Model relabeled and exported.");
           }
-          finalBaseId = AnimSet.remapLabels377To274(result.baseId) ?? result.baseId;
+          finalBaseId = AnimSet.remapBaseLabels(result.baseId, fromRev, toRev) ?? result.baseId;
       } else {
           finalBaseId = result.baseId;
       }
@@ -2905,15 +2905,14 @@ async getModelFileFromUser(): Promise<File | null> {
       }
 
       try {
+        const { from: fromRev, to: toRev } = AnimSet.parseRevisionDir(options.revisionDir);
         const buffer = await file.arrayBuffer();
         const packet = new Packet(new Uint8Array(buffer));
         const tempModel = Model.convertFromData(packet);
         tempModel.createLabelReferences();
 
-        if (options.revisionDir === '377to274') {
-          AnimSet.applyModelRelabel377To274(tempModel);
-          console.log(`Relabeled ${file.name} (377 -> 274)`);
-        }
+        AnimSet.applyModelRelabel(tempModel, fromRev, toRev);
+        console.log(`Relabeled ${file.name} (${fromRev} → ${toRev})`);
 
         const exportedData = tempModel.exportToOb2();
 
