@@ -360,7 +360,637 @@ export default class Model {
     };
   }
 
+
+  private static decodeV3(data: Packet): Model {
+    const footerPos = data.data.length - 26;
+    data.pos = footerPos;
+
+    const vertexCount = data.g2();
+    const faceCount = data.g2();
+    const texturedFaceCount = data.g1();
+    const hasFaceRenderTypes = data.g1();
+    const modelPriority = data.g1();
+    const hasFaceAlpha = data.g1();
+    const hasFaceSkins = data.g1();
+    const hasFaceTextures = data.g1();
+    const hasVertexSkins = data.g1();
+    //const hasMayaGroups = 
+    data.g1();
+
+    const vertexXLength = data.g2();
+    const vertexYLength = data.g2();
+    const vertexZLength = data.g2();
+    const faceIndicesLength = data.g2();
+    const textureIndicesLength = data.g2();
+    //const footerUnk = 
+    data.g2();
+
+    let pos = 0;
+    const texturedRenderTypePos = pos; pos += texturedFaceCount;
+    const vertexFlagsPos = pos; pos += vertexCount;
+    const faceRenderTypePos = pos; if (hasFaceRenderTypes === 1) pos += faceCount;
+    const faceIndicesComboPos = pos; pos += faceCount;
+    const facePriorityPos = pos; if (modelPriority === 255) pos += faceCount;
+    const faceSkinPos = pos; if (hasFaceSkins === 1) pos += faceCount;
+    const vertexSkinPos = pos; if (hasVertexSkins === 1) pos += vertexCount;
+    const faceAlphaPos = pos; if (hasFaceAlpha === 1) pos += faceCount;
+    const faceIndicesPos = pos; pos += faceIndicesLength;
+    //const faceColorsPos = pos; 
+    if (hasFaceTextures === 1) pos += faceCount * 2;
+    const textureMappingPos = pos; pos += textureIndicesLength;
+    const faceColorsDataPos = pos; pos += faceCount * 2;
+    const vertexXDataPos = pos; pos += vertexXLength;
+    const vertexYDataPos = pos; pos += vertexYLength;
+    const vertexZDataPos = pos; pos += vertexZLength;
+
+    const vertexX = new Int32Array(vertexCount);
+    const vertexY = new Int32Array(vertexCount);
+    const vertexZ = new Int32Array(vertexCount);
+    const vFlags = new Packet(data.data.slice(vertexFlagsPos, vertexFlagsPos + vertexCount));
+    const vXData = new Packet(data.data.slice(vertexXDataPos, vertexXDataPos + vertexXLength));
+    const vYData = new Packet(data.data.slice(vertexYDataPos, vertexYDataPos + vertexYLength));
+    const vZData = new Packet(data.data.slice(vertexZDataPos, vertexZDataPos + vertexZLength));
+
+    let lx = 0, ly = 0, lz = 0;
+    for (let i = 0; i < vertexCount; i++) {
+      const flag = vFlags.g1();
+      let dx = 0, dy = 0, dz = 0;
+      if ((flag & 1) !== 0) dx = vXData.gsmarts();
+      if ((flag & 2) !== 0) dy = vYData.gsmarts();
+      if ((flag & 4) !== 0) dz = vZData.gsmarts();
+      vertexX[i] = lx + dx;
+      vertexY[i] = ly + dy;
+      vertexZ[i] = lz + dz;
+      lx = vertexX[i]; ly = vertexY[i]; lz = vertexZ[i];
+    }
+
+    const faceVertexA = new Int32Array(faceCount);
+    const faceVertexB = new Int32Array(faceCount);
+    const faceVertexC = new Int32Array(faceCount);
+    const faceColor = new Int32Array(faceCount);
+
+    const colorBuf = new Packet(data.data.slice(faceColorsDataPos, faceColorsDataPos + faceCount * 2));
+    for (let i = 0; i < faceCount; i++) faceColor[i] = colorBuf.g2();
+
+    const indexTypeBuf = new Packet(data.data.slice(faceIndicesComboPos, faceIndicesComboPos + faceCount));
+    const indexDataBuf = new Packet(data.data.slice(faceIndicesPos, faceIndicesPos + faceIndicesLength));
+    let vA = 0, vB = 0, vC = 0, vOffset = 0;
+    for (let i = 0; i < faceCount; i++) {
+      const type = indexTypeBuf.g1();
+      if (type === 1) {
+        vA = indexDataBuf.gsmarts() + vOffset;
+        vB = indexDataBuf.gsmarts() + vA;
+        vC = indexDataBuf.gsmarts() + vB;
+        vOffset = vC;
+      } else if (type === 2) {
+        vB = vC;
+        vC = indexDataBuf.gsmarts() + vOffset;
+        vOffset = vC;
+      } else if (type === 3) {
+        vA = vC;
+        vC = indexDataBuf.gsmarts() + vOffset;
+        vOffset = vC;
+      } else if (type === 4) {
+        const temp = vA;
+        vA = vB;
+        vB = temp;
+        vC = indexDataBuf.gsmarts() + vOffset;
+        vOffset = vC;
+      }
+      faceVertexA[i] = vA;
+      faceVertexB[i] = vB;
+      faceVertexC[i] = vC;
+    }
+
+    let facePriorities = null;
+    if (modelPriority === 255) {
+      facePriorities = new Int32Array(faceCount);
+      for (let i = 0; i < faceCount; i++) facePriorities[i] = data.data[facePriorityPos + i];
+    }
+
+    let faceAlphas = null;
+    if (hasFaceAlpha === 1) {
+      faceAlphas = new Int32Array(faceCount);
+      for (let i = 0; i < faceCount; i++) faceAlphas[i] = data.data[faceAlphaPos + i];
+    }
+
+    let vertexLabels = null;
+    if (hasVertexSkins === 1) {
+      vertexLabels = new Int32Array(vertexCount);
+      for (let i = 0; i < vertexCount; i++) vertexLabels[i] = data.data[vertexSkinPos + i];
+    }
+
+    let faceLabels = null;
+    if (hasFaceSkins === 1) {
+      faceLabels = new Int32Array(faceCount);
+      for (let i = 0; i < faceCount; i++) faceLabels[i] = data.data[faceSkinPos + i];
+    }
+
+    let faceInfos = null;
+    if (hasFaceRenderTypes === 1) {
+      faceInfos = new Int32Array(faceCount);
+      for (let i = 0; i < faceCount; i++) faceInfos[i] = data.data[faceRenderTypePos + i];
+    }
+
+    const texturedVertexA = new Int32Array(texturedFaceCount);
+    const texturedVertexB = new Int32Array(texturedFaceCount);
+    const texturedVertexC = new Int32Array(texturedFaceCount);
+    if (texturedFaceCount > 0) {
+      const texTypeBuf = data.data.slice(texturedRenderTypePos, texturedRenderTypePos + texturedFaceCount);
+      const texDataBuf = new Packet(data.data.slice(textureMappingPos, textureMappingPos + textureIndicesLength));
+      for (let i = 0; i < texturedFaceCount; i++) {
+        if (texTypeBuf[i] === 0) {
+          texturedVertexA[i] = texDataBuf.g2();
+          texturedVertexB[i] = texDataBuf.g2();
+          texturedVertexC[i] = texDataBuf.g2();
+        }
+      }
+    }
+
+    const model = new Model({
+      vertexCount, vertexX, vertexY, vertexZ,
+      faceCount, faceVertexA, faceVertexB, faceVertexC,
+      faceColor, texturedFaceCount, texturedVertexA, texturedVertexB, texturedVertexC,
+      facePriority: facePriorities,
+      faceAlpha: faceAlphas,
+      vertexLabel: vertexLabels,
+      faceLabel: faceLabels,
+      faceInfo: faceInfos,
+      priorityVal: modelPriority !== 255 ? modelPriority : 0,
+      faceColorA: null, faceColorB: null, faceColorC: null,
+    });
+
+    model.hadOriginalFaceInfos = hasFaceRenderTypes === 1;
+    model.hadOriginalFacePriorities = modelPriority === 255;
+    model.hadOriginalFaceAlphas = hasFaceAlpha === 1;
+    model.hadOriginalFaceLabels = hasFaceSkins === 1;
+    model.hadOriginalVertexLabels = hasVertexSkins === 1;
+    model.originalFaceColor = new Int32Array(faceColor);
+
+    return model;
+  }
+
+private static decodeV2(data: Packet): Model {
+    const footerPos = data.data.length - 23;
+    data.pos = footerPos;
+
+    const vertexCount    = data.g2();
+    const faceCount      = data.g2();
+    const texFaceCount   = data.g1();
+    const hasFaceRenderTypes = data.g1();
+    const modelPriority      = data.g1();
+    const hasFaceAlpha       = data.g1();
+    const hasFaceSkins       = data.g1();
+    const hasVertexSkins     = data.g1();
+    data.g1();                            // hasMayaGroups
+    const vertexXLength      = data.g2();
+    const vertexYLength      = data.g2();
+    const vertexZLength      = data.g2();
+    const faceVertexLength   = data.g2();
+    const vertexSkinLength   = data.g2();
+
+    let off = 0;
+    const vertexFlagsOff    = off; off += vertexCount;
+    const faceOrientOff     = off; off += faceCount;
+    const facePriOff        = off; if (modelPriority === 255) off += faceCount;
+    const faceSkinsOff      = off; if (hasFaceSkins === 1)    off += faceCount;
+    const faceRenderTypesOff= off; if (hasFaceRenderTypes===1) off += faceCount;
+    const vertexSkinsOff    = off; off += vertexSkinLength;
+    const faceAlphasOff     = off; if (hasFaceAlpha === 1)    off += faceCount;
+    const faceIndicesOff    = off; off += faceVertexLength;
+    const faceColorsOff     = off; off += faceCount * 2;
+    const texMappingOff     = off; off += texFaceCount * 6;
+    const vertexXOff        = off; off += vertexXLength;
+    const vertexYOff        = off; off += vertexYLength;
+    const vertexZOff        = off;
+
+    const vertexX = new Int32Array(vertexCount);
+    const vertexY = new Int32Array(vertexCount);
+    const vertexZ = new Int32Array(vertexCount);
+
+    const vFlagBuf = new Packet(data.data.slice(vertexFlagsOff, vertexFlagsOff + vertexCount));
+    const vXBuf    = new Packet(data.data.slice(vertexXOff,     vertexXOff + vertexXLength));
+    const vYBuf    = new Packet(data.data.slice(vertexYOff,     vertexYOff + vertexYLength));
+    const vZBuf    = new Packet(data.data.slice(vertexZOff,     vertexZOff + vertexZLength));
+
+    let lx = 0, ly = 0, lz = 0;
+    for (let i = 0; i < vertexCount; i++) {
+        const flag = vFlagBuf.g1();
+        let dx = 0, dy = 0, dz = 0;
+        if ((flag & 1) !== 0) dx = vXBuf.gsmarts();
+        if ((flag & 2) !== 0) dy = vYBuf.gsmarts();
+        if ((flag & 4) !== 0) dz = vZBuf.gsmarts();
+        vertexX[i] = lx + dx;
+        vertexY[i] = ly + dy;
+        vertexZ[i] = lz + dz;
+        lx = vertexX[i]; ly = vertexY[i]; lz = vertexZ[i];
+    }
+
+    const faceColor = new Int32Array(faceCount);
+    const colorBuf  = new Packet(data.data.slice(faceColorsOff, faceColorsOff + faceCount * 2));
+    for (let i = 0; i < faceCount; i++) faceColor[i] = colorBuf.g2();
+
+    let faceInfos:       Int32Array | null = null;
+    let hasRenderType = false;
+    let isTextured    = false;
+
+    const faceTexturesOut  = new Int32Array(faceCount).fill(-1);
+    const textureCoordsOut = new Int32Array(faceCount).fill(-1);
+
+    if (hasFaceRenderTypes === 1) {
+        faceInfos = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++) {
+            const flag = data.data[faceRenderTypesOff + i] & 0xff;
+            if ((flag & 1) === 1) {
+                faceInfos[i] = 1;
+                hasRenderType = true;
+            } else {
+                faceInfos[i] = 0;
+            }
+            if ((flag & 2) === 2) {
+                textureCoordsOut[i] = flag >> 2;
+                faceTexturesOut[i]  = faceColor[i];
+                faceColor[i] = 127;
+                if (faceTexturesOut[i] !== -1) isTextured = true;
+            }
+        }
+    }
+
+    let facePriorities: Int32Array | null = null;
+    if (modelPriority === 255) {
+        facePriorities = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++)
+            facePriorities[i] = data.data[facePriOff + i];
+    }
+
+    let faceAlphas: Int32Array | null = null;
+    if (hasFaceAlpha === 1) {
+        faceAlphas = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++)
+            faceAlphas[i] = data.data[faceAlphasOff + i];
+    }
+
+    let faceLabels: Int32Array | null = null;
+    if (hasFaceSkins === 1) {
+        faceLabels = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++)
+            faceLabels[i] = data.data[faceSkinsOff + i] & 0xff;
+    }
+
+    let vertexLabels: Int32Array | null = null;
+    if (hasVertexSkins === 1) {
+        vertexLabels = new Int32Array(vertexCount);
+        for (let i = 0; i < vertexCount; i++)
+            vertexLabels[i] = data.data[vertexSkinsOff + i] & 0xff;
+    }
+
+    const faceVertexA = new Int32Array(faceCount);
+    const faceVertexB = new Int32Array(faceCount);
+    const faceVertexC = new Int32Array(faceCount);
+
+    const orientBuf = new Packet(data.data.slice(faceOrientOff,  faceOrientOff + faceCount));
+    const indexBuf  = new Packet(data.data.slice(faceIndicesOff, faceIndicesOff + faceVertexLength));
+
+    let vA = 0, vB = 0, vC = 0, vOff = 0;
+    for (let i = 0; i < faceCount; i++) {
+        const type = orientBuf.g1();
+        if (type === 1) {
+            vA = indexBuf.gsmarts() + vOff;
+            vB = indexBuf.gsmarts() + vA;
+            vC = indexBuf.gsmarts() + vB;
+            vOff = vC;
+        } else if (type === 2) {
+            vB = vC;
+            vC = indexBuf.gsmarts() + vOff;
+            vOff = vC;
+        } else if (type === 3) {
+            vA = vC;
+            vC = indexBuf.gsmarts() + vOff;
+            vOff = vC;
+        } else if (type === 4) {
+            const tmp = vA; vA = vB; vB = tmp;
+            vC = indexBuf.gsmarts() + vOff;
+            vOff = vC;
+        }
+        faceVertexA[i] = vA;
+        faceVertexB[i] = vB;
+        faceVertexC[i] = vC;
+    }
+
+    const texturedVertexA = new Int32Array(texFaceCount);
+    const texturedVertexB = new Int32Array(texFaceCount);
+    const texturedVertexC = new Int32Array(texFaceCount);
+    if (texFaceCount > 0) {
+        const texBuf = new Packet(data.data.slice(texMappingOff, texMappingOff + texFaceCount * 6));
+        for (let i = 0; i < texFaceCount; i++) {
+            texturedVertexA[i] = texBuf.g2();
+            texturedVertexB[i] = texBuf.g2();
+            texturedVertexC[i] = texBuf.g2();
+        }
+    }
+
+    if (texFaceCount > 0 && isTextured) {
+        let hasValidCoord = false;
+        for (let i = 0; i < faceCount; i++) {
+            const coord = textureCoordsOut[i] & 0xff;
+            if (coord !== 0xff) {
+                if (faceVertexA[i] === (texturedVertexA[coord] & 0xffff) &&
+                    faceVertexB[i] === (texturedVertexB[coord] & 0xffff) &&
+                    faceVertexC[i] === (texturedVertexC[coord] & 0xffff)) {
+                    textureCoordsOut[i] = -1;
+                } else {
+                    hasValidCoord = true;
+                }
+            }
+        }
+        if (!hasValidCoord) isTextured = false;
+    }
+
+    if (!isTextured)    { faceTexturesOut.fill(-1);  textureCoordsOut.fill(-1); }
+    if (!hasRenderType) faceInfos = null;
+
+    const model = new Model({
+        vertexCount, vertexX, vertexY, vertexZ,
+        faceCount, faceVertexA, faceVertexB, faceVertexC,
+        faceColor,
+        texturedFaceCount: texFaceCount,
+        texturedVertexA, texturedVertexB, texturedVertexC,
+        facePriority: facePriorities,
+        faceAlpha:    faceAlphas,
+        vertexLabel:  vertexLabels,
+        faceLabel:    faceLabels,
+        faceInfo:     faceInfos,
+        priorityVal:  modelPriority !== 255 ? modelPriority : 0,
+        faceColorA: null, faceColorB: null, faceColorC: null,
+    });
+
+    model.faceTextures.set(faceTexturesOut);
+    model.textureCoords.set(textureCoordsOut);
+
+    model.hadOriginalFaceInfos       = hasFaceRenderTypes === 1;
+    model.hadOriginalFacePriorities  = modelPriority === 255;
+    model.hadOriginalFaceAlphas      = hasFaceAlpha === 1;
+    model.hadOriginalFaceLabels      = hasFaceSkins === 1;
+    model.hadOriginalVertexLabels    = hasVertexSkins === 1;
+    model.originalFaceColor          = new Int32Array(faceColor);
+
+    return model;
+}
+
+private static decodeV1(data: Packet): Model {
+    const footerPos = data.data.length - 23;
+    data.pos = footerPos;
+
+    const vertexCount  = data.g2();
+    const faceCount    = data.g2();
+    const texFaceCount = data.g1();
+    const flags        = data.g1();
+    const hasFaceRenderTypes = (flags & 0x1) === 1;
+    const hasVersion   = (flags & 0x8) === 8;
+    let version = 1;
+    if (hasVersion) {
+        version = data.data[data.data.length - 24] & 0xff;
+    }
+
+    const modelPriority  = data.g1();
+    const hasFaceAlpha   = data.g1();
+    const hasFaceSkins   = data.g1();
+    const hasFaceTextures= data.g1();
+    const hasVertexSkins = data.g1();
+    const vertexXLength  = data.g2();
+    const vertexYLength  = data.g2();
+    const vertexZLength  = data.g2();
+    const faceVertexLength   = data.g2();
+    const textureIndicesLen  = data.g2();
+
+    let simpleTexFaceCount  = 0;
+    let complexTexFaceCount = 0;
+    let cubeTexFaceCount    = 0;
+    for (let i = 0; i < texFaceCount; i++) {
+        const t = data.data[i] & 0xff;
+        if (t === 0)           simpleTexFaceCount++;
+        if (t >= 1 && t <= 3)  complexTexFaceCount++;
+        if (t === 2)            cubeTexFaceCount++;
+    }
+
+    let off = texFaceCount + vertexCount;
+    const faceRenderTypesOff  = off; if (hasFaceRenderTypes)    off += faceCount;
+    const faceOrientOff       = off;                             off += faceCount;
+    const facePriOff          = off; if (modelPriority === 255)  off += faceCount;
+    const faceSkinsOff        = off; if (hasFaceSkins === 1)     off += faceCount;
+    const vertexSkinsOff      = off; if (hasVertexSkins === 1)   off += vertexCount;
+    const faceAlphasOff       = off; if (hasFaceAlpha === 1)     off += faceCount;
+    const faceIndicesOff      = off;                             off += faceVertexLength;
+    const faceMaterialsOff    = off; if (hasFaceTextures === 1)  off += faceCount * 2;
+    const faceTexCoordsOff    = off;                             off += textureIndicesLen;
+    const faceColorsOff       = off;                             off += faceCount * 2;
+    const vertexXOff          = off;                             off += vertexXLength;
+    const vertexYOff          = off;                             off += vertexYLength;
+    const vertexZOff          = off;                             off += vertexZLength;
+    const simpleTexturesOff   = off;                             off += simpleTexFaceCount * 6;
+    off += complexTexFaceCount * 6;
+
+    const vertexX = new Int32Array(vertexCount);
+    const vertexY = new Int32Array(vertexCount);
+    const vertexZ = new Int32Array(vertexCount);
+
+    const vFlagBuf = new Packet(data.data.slice(texFaceCount,     texFaceCount + vertexCount));
+    const vXBuf    = new Packet(data.data.slice(vertexXOff,       vertexXOff + vertexXLength));
+    const vYBuf    = new Packet(data.data.slice(vertexYOff,       vertexYOff + vertexYLength));
+    const vZBuf    = new Packet(data.data.slice(vertexZOff,       vertexZOff + vertexZLength));
+
+    let lx = 0, ly = 0, lz = 0;
+    for (let i = 0; i < vertexCount; i++) {
+        const flag = vFlagBuf.g1();
+        let dx = 0, dy = 0, dz = 0;
+        if ((flag & 1) !== 0) dx = vXBuf.gsmarts();
+        if ((flag & 2) !== 0) dy = vYBuf.gsmarts();
+        if ((flag & 4) !== 0) dz = vZBuf.gsmarts();
+        vertexX[i] = lx + dx;
+        vertexY[i] = ly + dy;
+        vertexZ[i] = lz + dz;
+        lx = vertexX[i]; ly = vertexY[i]; lz = vertexZ[i];
+    }
+
+    if (version >= 13) {
+        for (let i = 0; i < vertexCount; i++) {
+            vertexX[i] >>= 2;
+            vertexY[i] >>= 2;
+            vertexZ[i] >>= 2;
+        }
+    }
+
+    const faceColor = new Int32Array(faceCount);
+    const colorBuf  = new Packet(data.data.slice(faceColorsOff, faceColorsOff + faceCount * 2));
+    for (let i = 0; i < faceCount; i++) faceColor[i] = colorBuf.g2();
+
+    let faceInfos: Int32Array | null = null;
+    let hasRenderType = false;
+    if (hasFaceRenderTypes) {
+        faceInfos     = new Int32Array(faceCount);
+        hasRenderType = true;
+        for (let i = 0; i < faceCount; i++)
+            faceInfos[i] = data.data[faceRenderTypesOff + i] & 0xff;
+    }
+
+    const faceTexturesOut  = new Int32Array(faceCount).fill(-1);
+    const textureCoordsOut = new Int32Array(faceCount).fill(-1);
+    let isTextured = false;
+
+    if (hasFaceTextures === 1 && texFaceCount > 0) {
+        for (let i = 0; i < faceCount; i++) {
+            const hi = data.data[faceMaterialsOff + i * 2]     & 0xff;
+            const lo = data.data[faceMaterialsOff + i * 2 + 1] & 0xff;
+            faceTexturesOut[i] = ((hi << 8) | lo) - 1;
+            if (faceTexturesOut[i] !== -1) {
+                const coord = (data.data[faceTexCoordsOff + i] & 0xff) - 1;
+                textureCoordsOut[i] = coord;
+                isTextured = true;
+            }
+        }
+    }
+
+    let facePriorities: Int32Array | null = null;
+    if (modelPriority === 255) {
+        facePriorities = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++)
+            facePriorities[i] = data.data[facePriOff + i];
+    }
+
+    let faceAlphas: Int32Array | null = null;
+    if (hasFaceAlpha === 1) {
+        faceAlphas = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++)
+            faceAlphas[i] = data.data[faceAlphasOff + i];
+    }
+
+    let faceLabels: Int32Array | null = null;
+    if (hasFaceSkins === 1) {
+        faceLabels = new Int32Array(faceCount);
+        for (let i = 0; i < faceCount; i++)
+            faceLabels[i] = data.data[faceSkinsOff + i] & 0xff;
+    }
+
+    let vertexLabels: Int32Array | null = null;
+    if (hasVertexSkins === 1) {
+        vertexLabels = new Int32Array(vertexCount);
+        for (let i = 0; i < vertexCount; i++)
+            vertexLabels[i] = data.data[vertexSkinsOff + i] & 0xff;
+    }
+
+    const faceVertexA = new Int32Array(faceCount);
+    const faceVertexB = new Int32Array(faceCount);
+    const faceVertexC = new Int32Array(faceCount);
+
+    const orientBuf = new Packet(data.data.slice(faceOrientOff,  faceOrientOff + faceCount));
+    const indexBuf  = new Packet(data.data.slice(faceIndicesOff, faceIndicesOff + faceVertexLength));
+
+    let vA = 0, vB = 0, vC = 0, vOff2 = 0;
+    for (let i = 0; i < faceCount; i++) {
+        const type = orientBuf.g1();
+        if (type === 1) {
+            vA = indexBuf.gsmarts() + vOff2;
+            vB = indexBuf.gsmarts() + vA;
+            vC = indexBuf.gsmarts() + vB;
+            vOff2 = vC;
+        } else if (type === 2) {
+            vB = vC;
+            vC = indexBuf.gsmarts() + vOff2;
+            vOff2 = vC;
+        } else if (type === 3) {
+            vA = vC;
+            vC = indexBuf.gsmarts() + vOff2;
+            vOff2 = vC;
+        } else if (type === 4) {
+            const tmp = vA; vA = vB; vB = tmp;
+            vC = indexBuf.gsmarts() + vOff2;
+            vOff2 = vC;
+        }
+        faceVertexA[i] = vA;
+        faceVertexB[i] = vB;
+        faceVertexC[i] = vC;
+    }
+
+    const texturedVertexA = new Int32Array(texFaceCount);
+    const texturedVertexB = new Int32Array(texFaceCount);
+    const texturedVertexC = new Int32Array(texFaceCount);
+
+    if (texFaceCount > 0) {
+        const simpleBuf = new Packet(
+            data.data.slice(simpleTexturesOff, simpleTexturesOff + simpleTexFaceCount * 6)
+        );
+        for (let i = 0; i < texFaceCount; i++) {
+            const texType = data.data[i] & 0xff;
+            if (texType === 0) {
+                texturedVertexA[i] = simpleBuf.g2();
+                texturedVertexB[i] = simpleBuf.g2();
+                texturedVertexC[i] = simpleBuf.g2();
+            }
+        }
+    }
+
+    if (isTextured && texFaceCount > 0) {
+        let hasValidCoord = false;
+        for (let i = 0; i < faceCount; i++) {
+            const coord = textureCoordsOut[i];
+            if (coord >= 0 && coord < texFaceCount) {
+                if (faceVertexA[i] === (texturedVertexA[coord] & 0xffff) &&
+                    faceVertexB[i] === (texturedVertexB[coord] & 0xffff) &&
+                    faceVertexC[i] === (texturedVertexC[coord] & 0xffff)) {
+                    textureCoordsOut[i] = -1;
+                } else {
+                    hasValidCoord = true;
+                }
+            }
+        }
+        if (!hasValidCoord) isTextured = false;
+    }
+
+    if (!isTextured)    { faceTexturesOut.fill(-1); textureCoordsOut.fill(-1); }
+    if (!hasRenderType) faceInfos = null;
+
+    const model = new Model({
+        vertexCount, vertexX, vertexY, vertexZ,
+        faceCount, faceVertexA, faceVertexB, faceVertexC,
+        faceColor,
+        texturedFaceCount: texFaceCount,
+        texturedVertexA, texturedVertexB, texturedVertexC,
+        facePriority: facePriorities,
+        faceAlpha:    faceAlphas,
+        vertexLabel:  vertexLabels,
+        faceLabel:    faceLabels,
+        faceInfo:     faceInfos,
+        priorityVal:  modelPriority !== 255 ? modelPriority : 0,
+        faceColorA: null, faceColorB: null, faceColorC: null,
+    });
+
+    model.faceTextures.set(faceTexturesOut);
+    model.textureCoords.set(textureCoordsOut);
+
+    model.hadOriginalFaceInfos      = hasFaceRenderTypes;
+    model.hadOriginalFacePriorities = modelPriority === 255;
+    model.hadOriginalFaceAlphas     = hasFaceAlpha === 1;
+    model.hadOriginalFaceLabels     = hasFaceSkins === 1;
+    model.hadOriginalVertexLabels   = hasVertexSkins === 1;
+    model.originalFaceColor         = new Int32Array(faceColor);
+
+    return model;
+}
+
   static convertFromData(data: Packet): Model {
+    const lastByte = data.data[data.data.length - 1];
+    const secondLastByte = data.data[data.data.length - 2];
+
+    if (lastByte === 253 && secondLastByte === 255) {
+        return Model.decodeV3(data);
+    }
+    if (lastByte === 254 && secondLastByte === 255) {
+        return Model.decodeV2(data);
+    }
+    if (lastByte === 255 && secondLastByte === 255) {
+        return Model.decodeV1(data);
+    }
+
     const originalDataEndPos = data.data.length - 18;
     data.pos = originalDataEndPos;
 

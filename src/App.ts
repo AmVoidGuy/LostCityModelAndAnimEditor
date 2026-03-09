@@ -200,7 +200,7 @@ setupAnimsetTools() {
         
         if (baseId === undefined) return alert("Could not resolve Base ID.");
 
-        const data = AnimSet.exportAnimSet(baseId);
+        const data = AnimSet.exportAsLegacyAnim(baseId);
         const blob = new Blob([data], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);

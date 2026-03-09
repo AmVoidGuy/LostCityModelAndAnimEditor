@@ -353,6 +353,74 @@ static async importWithConflictCheck(fileData: Uint8Array) {
     };
   }
 
+  static exportAsLegacyAnim(baseId: number): Uint8Array {
+    const base = AnimBase.instances[baseId];
+    const frames = AnimFrame.getFramesByBaseId(baseId).sort((a, b) => a.id - b.id);
+
+    if (!base || frames.length === 0) throw new Error("Base or frames missing for export");
+
+    const meta = new Packet(new Uint8Array(2 + (frames.length * 3)));
+    const flags = new Packet(new Uint8Array(frames.length * base.animLength));
+    const values = new Packet(new Uint8Array(frames.length * base.animLength * 6));
+    const delays = new Packet(new Uint8Array(frames.length));
+
+    meta.p2(frames.length);
+
+    const mapping: Record<number, number> = {};
+
+    for (let fIdx = 0; fIdx < frames.length; fIdx++) {
+      const frame = frames[fIdx];
+      const legacyId = fIdx;
+      mapping[frame.id] = legacyId;
+
+      meta.p2(legacyId); 
+      meta.p1(base.animLength);
+
+      for (let i = 0; i < base.animLength; i++) {
+        const idx = frame.bases ? Array.from(frame.bases).indexOf(i) : -1;
+        let f = 0;
+        if (idx !== -1) {
+          const def = base.animTypes![i] === 3 ? 128 : 0;
+          if (frame.x![idx] !== def) { f |= 1; values.psmarts(frame.x![idx]); }
+          if (frame.y![idx] !== def) { f |= 2; values.psmarts(frame.y![idx]); }
+          if (frame.z![idx] !== def) { f |= 4; values.psmarts(frame.z![idx]); }
+        }
+        flags.p1(f);
+      }
+      delays.p1(frame.frameDelay);
+    }
+
+    const basePack = new Packet(new Uint8Array(1000000));
+    basePack.p1(base.animLength);
+    for (let i = 0; i < base.animLength; i++) basePack.p1(base.animTypes![i]);
+    for (let i = 0; i < base.animLength; i++) {
+      basePack.p1(base.animLabels![i]!.length);
+      for (const l of base.animLabels![i]!) basePack.p1(l);
+    }
+
+    if (values.pos > 65535 || flags.pos > 65535) {
+        console.warn("WARNING: This animation is too large for the Legacy format. It may corrupt upon import.");
+    }
+
+    const totalSize = meta.pos + flags.pos + values.pos + delays.pos + basePack.pos + 8;
+    const total = new Packet(new Uint8Array(totalSize));
+    
+    const mSize = meta.pos; total.pdata(meta.data, 0, meta.pos);
+    const flSize = flags.pos; total.pdata(flags.data, 0, flags.pos);
+    const vSize = values.pos; total.pdata(values.data, 0, values.pos);
+    const dSize = delays.pos; total.pdata(delays.data, 0, delays.pos);
+    total.pdata(basePack.data, 0, basePack.pos);
+
+    total.p2(mSize - 2); 
+    total.p2(flSize); 
+    total.p2(vSize); 
+    total.p2(dSize);
+
+    console.log("Animation remapped for Legacy Export:");
+    console.table(mapping);
+
+    return total.data.slice(0, total.pos);
+  }
   static exportAnimSet(baseId: number): Uint8Array {
     const base = AnimBase.instances[baseId];
     const frames = AnimFrame.getFramesByBaseId(baseId).sort((a, b) => a.id - b.id);

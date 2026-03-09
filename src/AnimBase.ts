@@ -86,6 +86,39 @@ export default class AnimBase {
       return instance;
   }
 
+    static convertFromDataDat2(id: number, fileData: Packet): AnimBase {
+    const instance = new AnimBase();
+    instance.id = id;
+
+    const count = fileData.g1();
+    instance.animLength = count;
+
+    const types = new Uint8Array(count);
+    for (let i = 0; i < count; i++) {
+      types[i] = fileData.g1();
+    }
+
+    const labelLengths = new Int32Array(count);
+    for (let i = 0; i < count; i++) {
+      labelLengths[i] = fileData.g1();
+    }
+
+    const labels = new Array<Uint8Array>(count);
+    for (let i = 0; i < count; i++) {
+      const groupLabels = new Uint8Array(labelLengths[i]);
+      for (let j = 0; j < labelLengths[i]; j++) {
+        groupLabels[j] = fileData.g1();
+      }
+      labels[i] = groupLabels;
+    }
+
+    instance.animTypes = types;
+    instance.animLabels = labels;
+
+    AnimBase.instances[id] = instance;
+    return instance;
+  }
+
   animLength: number = 0;
   animTypes: Uint8Array | null = null;
   animLabels: (Uint8Array | null)[] | null = null;

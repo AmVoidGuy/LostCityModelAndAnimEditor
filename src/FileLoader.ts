@@ -800,11 +800,24 @@ export default class FileLoader {
       data.iframeIds = new Array(maxIndex);
       data.delayValues = new Array(maxIndex);
 
-      for (let i = 1; i <= maxIndex; i++) {
-        data.frameIds[i - 1] = frames.get(i);
-        data.iframeIds[i - 1] = iframes.get(i);
-        data.delayValues[i - 1] = delays.get(i);
-      }
+        for (let i = 1; i <= maxIndex; i++) {
+            const rawFrame = frames.get(i);
+            if (!rawFrame) continue;
+            const modernMatch = rawFrame.match(/anim_(\d+)_f(\d+)/);
+            if (modernMatch) {
+                const archiveId = parseInt(modernMatch[1]);
+                const fileId = parseInt(modernMatch[2]);
+                const combinedId = (archiveId << 16) | fileId;
+                data.frameIds[i - 1] = combinedId.toString();
+            } else {
+                data.frameIds[i - 1] = rawFrame;
+            }
+            
+            data.iframeIds[i - 1] = iframes.get(i);
+
+            const delay = delays.get(i);
+            data.delayValues[i - 1] = delay !== undefined ? delay : 0;
+        }
     } else {
       data.frameIds = [];
       data.iframeIds = [];
@@ -901,8 +914,49 @@ export default class FileLoader {
     this.objData.clear();
     this.availableTextures.clear();
 
+    const base2Files = Array.from(files).filter(f => f.name.endsWith(".base2"));
+    const anim2Files = Array.from(files).filter(f => f.name.endsWith(".anim2"));
+
+for (const file of base2Files) {
+  try {
+    const id = parseInt(file.name.split(".")[0], 10);
+    const arrayBuffer = await this.readFileAsArrayBuffer(file);
+    const uint8View = new Uint8Array(arrayBuffer);
+    
+    if (uint8View.length <= 1) {
+       console.warn(`Base ${id} is empty, skipping.`);
+       continue;
+    }
+
+    const data = new Packet(uint8View);
+    AnimBase.convertFromDataDat2(id, data);
+  } catch (e) {
+    console.error(`Error loading .base2: ${file.name}`, e);
+  }
+}
+
+for (const file of anim2Files) {
+    try {
+        const path = (file as any).webkitRelativePath || file.name;
+        const parts = path.split("/");
+        const fileName = parts[parts.length - 1]; 
+        const folderName = parts[parts.length - 2];
+
+        const archiveId = parseInt(folderName);
+        const fileId = parseInt(fileName.split(".")[0]);
+
+        if (!isNaN(archiveId) && !isNaN(fileId)) {
+            const combinedId = (archiveId << 16) | fileId;
+            const arrayBuffer = await this.readFileAsArrayBuffer(file);
+            AnimFrame.convertFromDataDat2(combinedId, new Uint8Array(arrayBuffer));
+        }
+    } catch (e) {
+        console.error("Failed to load anim2:", file.name, e);
+    }
+}
+
     const ob2Files = Array.from(files).filter((file) =>
-      file.name.toLowerCase().endsWith(".ob2")
+      file.name.toLowerCase().endsWith(".dat")
     );
 
     const packFiles = Array.from(files).filter((file) =>

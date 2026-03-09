@@ -165,6 +165,77 @@ export default class AnimFrame {
     return frame;
   }
 
+static convertFromDataDat2(id: number, fileData: Uint8Array): AnimFrame {
+    const buf = new Packet(fileData);
+    const valueBuf = new Packet(fileData);
+
+    const baseId = buf.g2();
+    const base = AnimBase.instances[baseId];
+
+    if (!base) {
+        throw new Error(`AnimFrame ${id}: AnimBase ${baseId} not loaded yet.`);
+    }
+
+    const groupCount = buf.g1();
+    valueBuf.pos = buf.pos + groupCount;
+
+    const frame = new AnimFrame();
+    frame.id = id;
+    frame.base = base;
+
+    const labels = new Int32Array(500);
+    const x = new Int32Array(500);
+    const y = new Int32Array(500);
+    const z = new Int32Array(500);
+
+    let lastGroup = -1;
+    let current = 0;
+
+    for (let i = 0; i < groupCount; i++) {
+        const flags = buf.g1();
+        if (flags === 0) continue;
+
+        const type = base.animTypes![i];
+
+        if (type !== 0) {
+            for (let group = i - 1; group > lastGroup; group--) {
+                if (base.animTypes![group] === 0) {
+                    labels[current] = group;
+                    x[current] = 0; y[current] = 0; z[current] = 0;
+                    current++;
+                    break;
+                }
+            }
+        }
+
+        labels[current] = i;
+        let defaultValue = (type === 3) ? 128 : 0;
+
+        x[current] = (flags & 1) !== 0 ? valueBuf.gsmarts() : defaultValue;
+        y[current] = (flags & 2) !== 0 ? valueBuf.gsmarts() : defaultValue;
+        z[current] = (flags & 4) !== 0 ? valueBuf.gsmarts() : defaultValue;
+
+        lastGroup = i;
+        current++;
+    }
+
+    frame.frameLength = current;
+    frame.bases = new Int32Array(current);
+    frame.x = new Int32Array(current);
+    frame.y = new Int32Array(current);
+    frame.z = new Int32Array(current);
+
+    for (let k = 0; k < current; k++) {
+        frame.bases[k] = labels[k];
+        frame.x[k] = x[k];
+        frame.y[k] = y[k];
+        frame.z[k] = z[k];
+    }
+
+    AnimFrame.instances[id] = frame;
+    return frame;
+}
+
   exportToFrame(): Uint8Array | null {
     if (!this.base || !this.base.animTypes) {
       console.error(
